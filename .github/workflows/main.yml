@@ -15,242 +15,26 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Generate Pure Native Android Project
+      - name: Generate Project & Build APK
+        shell: bash --noprofile --norc -eo pipefail {0}
         run: |
-          python3 - << 'PYEOF'
-          import os
+          set +o pipefail
+          rm -rf app build.gradle.kts settings.gradle.kts gradle.properties
+          mkdir -p app/src/main/res/xml
+          mkdir -p app/src/main/java/com/protether/nx/ptp
 
-          def write_file(path, lines):
-              os.makedirs(os.path.dirname(path) if os.path.dirname(path) else ".", exist_ok=True)
-              with open(path, "w", encoding="utf-8") as f:
-                  f.write("\n".join(lines) + "\n")
+          printf "android.useAndroidX=true\norg.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8\n" > gradle.properties
 
-          write_file("gradle.properties", [
-              "android.useAndroidX=true",
-              "org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8"
-          ])
+          printf 'pluginManagement {\n    repositories {\n        google()\n        mavenCentral()\n        gradlePluginPortal()\n    }\n}\ndependencyResolutionManagement {\n    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)\n    repositories {\n        google()\n        mavenCentral()\n    }\n}\nrootProject.name = "ProTetherNX"\ninclude(":app")\n' > settings.gradle.kts
 
-          write_file("settings.gradle.kts", [
-              "pluginManagement {",
-              "    repositories {",
-              "        google()",
-              "        mavenCentral()",
-              "        gradlePluginPortal()",
-              "    }",
-              "}",
-              "dependencyResolutionManagement {",
-              "    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)",
-              "    repositories {",
-              "        google()",
-              "        mavenCentral()",
-              "    }",
-              "}",
-              'rootProject.name = "ProTetherNX"',
-              'include(":app")'
-          ])
+          printf 'plugins {\n    id("com.android.application") version "8.2.2" apply false\n    id("org.jetbrains.kotlin.android") version "1.9.22" apply false\n}\n' > build.gradle.kts
 
-          write_file("build.gradle.kts", [
-              "plugins {",
-              '    id("com.android.application") version "8.2.2" apply false',
-              '    id("org.jetbrains.kotlin.android") version "1.9.22" apply false',
-              "}"
-          ])
+          printf 'plugins {\n    id("com.android.application")\n    id("org.jetbrains.kotlin.android")\n}\nandroid {\n    namespace = "com.protether.nx"\n    compileSdk = 34\n    defaultConfig {\n        applicationId = "com.protether.nx"\n        minSdk = 26\n        targetSdk = 34\n        versionCode = 1\n        versionName = "1.0.0"\n    }\n    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }\n    kotlinOptions {\n        jvmTarget = "17"\n    }\n}\ndependencies {\n    implementation("androidx.exifinterface:exifinterface:1.3.7")\n}\n' > app/build.gradle.kts
 
-          write_file("app/build.gradle.kts", [
-              "plugins {",
-              '    id("com.android.application")',
-              '    id("org.jetbrains.kotlin.android")',
-              "}",
-              "android {",
-              '    namespace = "com.protether.nx"',
-              "    compileSdk = 34",
-              "    defaultConfig {",
-              '        applicationId = "com.protether.nx"',
-              "        minSdk = 26",
-              "        targetSdk = 34",
-              "        versionCode = 1",
-              '        versionName = "1.0.0"',
-              "    }",
-              "    compileOptions {",
-              "        sourceCompatibility = JavaVersion.VERSION_17",
-              "        targetCompatibility = JavaVersion.VERSION_17",
-              "    }",
-              "    kotlinOptions {",
-              '        jvmTarget = "17"',
-              "    }",
-              "}",
-              "dependencies {",
-              '    implementation("androidx.exifinterface:exifinterface:1.3.7")',
-              "}"
-          ])
+          printf '<?xml version="1.0" encoding="utf-8"?>\n<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-feature android:name="android.hardware.usb.host" android:required="true" />\n    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />\n    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />\n    <application\n        android:allowBackup="true"\n        android:label="ProTether NX"\n        android:supportsRtl="true"\n        android:theme="@android:style/Theme.DeviceDefault.NoActionBar">\n        <activity\n            android:name=".MainActivity"\n            android:exported="true"\n            android:screenOrientation="portrait"\n            android:launchMode="singleTop">\n            <intent-filter>\n                <action android:name="android.intent.action.MAIN" />\n                <category android:name="android.intent.category.LAUNCHER" />\n            </intent-filter>\n            <intent-filter>\n                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />\n            </intent-filter>\n            <meta-data\n                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"\n                android:resource="@xml/device_filter" />\n        </activity>\n    </application>\n</manifest>\n' > app/src/main/AndroidManifest.xml
 
-          write_file("app/src/main/AndroidManifest.xml", [
-              '<?xml version="1.0" encoding="utf-8"?>',
-              '<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
-              '    <uses-feature android:name="android.hardware.usb.host" android:required="true" />',
-              '    <uses-permission android:name="android.permission.INTERNET" />',
-              '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />',
-              '    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />',
-              '    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />',
-              '    <application',
-              '        android:allowBackup="true"',
-              '        android:label="ProTether NX"',
-              '        android:supportsRtl="true"',
-              '        android:theme="@android:style/Theme.DeviceDefault.NoActionBar">',
-              '        <activity',
-              '            android:name=".MainActivity"',
-              '            android:exported="true"',
-              '            android:screenOrientation="portrait"',
-              '            android:launchMode="singleTop">',
-              '            <intent-filter>',
-              '                <action android:name="android.intent.action.MAIN" />',
-              '                <category android:name="android.intent.category.LAUNCHER" />',
-              '            </intent-filter>',
-              '            <intent-filter>',
-              '                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />',
-              '            </intent-filter>',
-              '            <meta-data',
-              '                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"',
-              '                android:resource="@xml/device_filter" />',
-              '        </activity>',
-              '    </application>',
-              '</manifest>'
-          ])
+          printf '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <usb-device class="6" subclass="1" protocol="1" />\n    <usb-device vendor-id="1200" />\n    <usb-device vendor-id="1193" />\n</resources>\n' > app/src/main/res/xml/device_filter.xml
 
-          write_file("app/src/main/res/xml/device_filter.xml", [
-              '<?xml version="1.0" encoding="utf-8"?>',
-              '<resources>',
-              '    <usb-device class="6" subclass="1" protocol="1" />',
-              '    <usb-device vendor-id="1200" />',
-              '    <usb-device vendor-id="1193" />',
-              '</resources>'
-          ])
+          printf 'package com.protether.nx.ptp\nimport android.content.Context\nimport android.hardware.usb.*\nimport java.nio.ByteBuffer\nimport java.nio.ByteOrder\nclass PtpUsbController(context: Context) {\n    private val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager\n    private var connection: UsbDeviceConnection? = null\n    private var usbInterface: UsbInterface? = null\n    private var endpointOut: UsbEndpoint? = null\n    private var transactionId = 1\n    fun setTouchAfZone(zoneIndex: Int): Boolean {\n        val x = (zoneIndex %% 3) * 2000 + 1000\n        val y = (zoneIndex / 3) * 1300 + 650\n        return sendPtpCommand(0x9205, intArrayOf(x, y))\n    }\n    fun triggerRemoteShutter(): Boolean {\n        return sendPtpCommand(0x100E, intArrayOf(0, 0))\n    }\n    private fun sendPtpCommand(opCode: Int, params: IntArray = intArrayOf()): Boolean {\n        val conn = connection ?: return false\n        val epOut = endpointOut ?: return false\n        val length = 12 + (params.size * 4)\n        val buffer = ByteBuffer.allocate(length).order(ByteOrder.LITTLE_ENDIAN)\n        buffer.putInt(length)\n        buffer.putShort(1.toShort())\n        buffer.putShort(opCode.toShort())\n        buffer.putInt(transactionId++)\n        params.forEach { buffer.putInt(it) }\n        val bytes = buffer.array()\n        return conn.bulkTransfer(epOut, bytes, bytes.size, 2500) >= 0\n    }\n    fun close() {\n        usbInterface?.let { connection?.releaseInterface(it) }\n        connection?.close()\n    }\n}\n' > app/src/main/java/com/protether/nx/ptp/PtpUsbController.kt
 
-          write_file("app/src/main/java/com/protether/nx/ptp/PtpUsbController.kt", [
-              "package com.protether.nx.ptp",
-              "import android.content.Context",
-              "import android.hardware.usb.*",
-              "import java.nio.ByteBuffer",
-              "import java.nio.ByteOrder",
-              "class PtpUsbController(context: Context) {",
-              "    private val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager",
-              "    private var connection: UsbDeviceConnection? = null",
-              "    private var usbInterface: UsbInterface? = null",
-              "    private var endpointOut: UsbEndpoint? = null",
-              "    private var transactionId = 1",
-              "    fun setTouchAfZone(zoneIndex: Int): Boolean {",
-              "        val x = (zoneIndex % 3) * 2000 + 1000",
-              "        val y = (zoneIndex / 3) * 1300 + 650",
-              "        return sendPtpCommand(0x9205, intArrayOf(x, y))",
-              "    }",
-              "    fun setExposureProp(propCode: Int, value: Int): Boolean {",
-              "        return sendPtpCommand(0x1016, intArrayOf(propCode, value))",
-              "    }",
-              "    fun triggerRemoteShutter(): Boolean {",
-              "        return sendPtpCommand(0x100E, intArrayOf(0, 0))",
-              "    }",
-              "    private fun sendPtpCommand(opCode: Int, params: IntArray = intArrayOf()): Boolean {",
-              "        val conn = connection ?: return false",
-              "        val epOut = endpointOut ?: return false",
-              "        val length = 12 + (params.size * 4)",
-              "        val buffer = ByteBuffer.allocate(length).order(ByteOrder.LITTLE_ENDIAN)",
-              "        buffer.putInt(length)",
-              "        buffer.putShort(1.toShort())",
-              "        buffer.putShort(opCode.toShort())",
-              "        buffer.putInt(transactionId++)",
-              "        params.forEach { buffer.putInt(it) }",
-              "        val bytes = buffer.array()",
-              "        return conn.bulkTransfer(epOut, bytes, bytes.size, 2500) >= 0",
-              "    }",
-              "    fun close() {",
-              "        usbInterface?.let { connection?.releaseInterface(it) }",
-              "        connection?.close()",
-              "    }",
-              "}"
-          ])
-
-          write_file("app/src/main/java/com/protether/nx/MainActivity.kt", [
-              "package com.protether.nx",
-              "import android.app.Activity",
-              "import android.graphics.Color",
-              "import android.graphics.Typeface",
-              "import android.graphics.drawable.GradientDrawable",
-              "import android.os.Bundle",
-              "import android.view.Gravity",
-              "import android.view.View",
-              "import android.widget.*",
-              "import com.protether.nx.ptp.PtpUsbController",
-              "class MainActivity : Activity() {",
-              "    private lateinit var ptpController: PtpUsbController",
-              "    private lateinit var statusTv: TextView",
-              "    private lateinit var contentFrame: FrameLayout",
-              "    private var autoTether = true",
-              "    private var activeZone = 4",
-              '    private val shutters = arrayOf("1/60s", "1/125s", "1/200s", "1/400s", "1/800s", "1/1600s")',
-              '    private val apertures = arrayOf("f/1.8", "f/2.8", "f/4.0", "f/5.6", "f/8.0")',
-              '    private val isos = arrayOf("ISO 100", "ISO 200", "ISO 400", "ISO 800", "ISO 1600", "ISO 3200")',
-              '    private val wbs = arrayOf("3200K", "4500K", "5200K", "5600K", "6500K")',
-              "    private var sIdx = 2; private var aIdx = 1; private var iIdx = 2; private var wIdx = 2",
-              "    private val files = mutableListOf(",
-              '        "DSC_4824.NEF • RAW • f/2.8 • 1/250s • ISO 400 (28.9 MB)",',
-              '        "DSC_4823.NEF • RAW • f/4.0 • 1/160s • ISO 200 (30.2 MB)",',
-              '        "DSC_4822.JPG • JPG • f/2.8 • 1/200s • ISO 400 (9.1 MB)",',
-              '        "DSC_4821.NEF • RAW • f/2.8 • 1/200s • ISO 400 (29.4 MB)"',
-              "    )",
-              "    override fun onCreate(savedInstanceState: Bundle?) {",
-              "        super.onCreate(savedInstanceState)",
-              "        ptpController = PtpUsbController(this)",
-              "        val root = LinearLayout(this).apply {",
-              "            orientation = LinearLayout.VERTICAL",
-              '            setBackgroundColor(Color.parseColor("#0B0E14"))',
-              "            setPadding(36, 48, 36, 36)",
-              "        }",
-              "        val header = LinearLayout(this).apply {",
-              "            orientation = LinearLayout.HORIZONTAL",
-              "            gravity = Gravity.CENTER_VERTICAL",
-              "        }",
-              "        val titleCol = LinearLayout(this).apply {",
-              "            orientation = LinearLayout.VERTICAL",
-              "            layoutParams = LinearLayout.LayoutParams(0, -2, 1f)",
-              "        }",
-              "        val titleTv = TextView(this).apply {",
-              '            text = "ProTether NX"',
-              "            textSize = 20f",
-              "            setTypeface(null, Typeface.BOLD)",
-              "            setTextColor(Color.WHITE)",
-              "        }",
-              "        statusTv = TextView(this).apply {",
-              '            text = "Siap • USB OTG / Wi-Fi PTP-IP Aktif"',
-              "            textSize = 12f",
-              '            setTextColor(Color.parseColor("#34D399"))',
-              "        }",
-              "        titleCol.addView(titleTv); titleCol.addView(statusTv)",
-              "        val tetherBtn = Button(this).apply {",
-              '            text = "Auto-Tether: ON"',
-              "            textSize = 11f",
-              "            setTextColor(Color.WHITE)",
-              '            background = roundedBox("#1E293B", "#334155")',
-              "            setOnClickListener {",
-              "                autoTether = !autoTether",
-              '                text = if (autoTether) "Auto-Tether: ON" else "Auto-Tether: OFF"',
-              "            }",
-              "        }",
-              "        header.addView(titleCol); header.addView(tetherBtn)",
-              "        root.addView(header)",
-              "        contentFrame = FrameLayout(this).apply {",
-              "            layoutParams = LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = 28; bottomMargin = 28 }",
-              "        }",
-              "        root.addView(contentFrame)",
-              "        val navRow = LinearLayout(this).apply {",
-              "            orientation = LinearLayout.HORIZONTAL",
-              '            background = roundedBox("#161B26", "#263042")',
-              "            setPadding(16, 16, 16, 16)",
-              "        }",
-              '        val tab1 = makeTabBtn("1. Live Remote") { showLiveRemote() }',
-              '        val tab2 = makeTabBtn("2. Tethering") { showTethering() }',
-              '        val tab3 = makeTabBtn("3. Galeri & EXIF") { showGallery() }',
-              "        navRow.addView(tab1); navRow.addView(tab2); navRow.addView(tab3)",
-              "        root.addView(navRow)",
-              "        setContentView(root)",
-              "        showLiveRemote()",
-              "    }",
+          printf 'package com.protether.nx\nimport
