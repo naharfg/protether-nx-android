@@ -18,11 +18,57 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Buat File gradle.properties (Aktifkan AndroidX)
+      - name: Siapkan gradle.properties & Perbaiki Manifest Otomatis
         run: |
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           echo "org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8" >> gradle.properties
+
+          mkdir -p app/src/main/res/xml
+
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-feature android:name="android.hardware.usb.host" android:required="true" />
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+              <application
+                  android:allowBackup="true"
+                  android:label="ProTether NX"
+                  android:supportsRtl="true"
+                  android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:screenOrientation="portrait"
+                      android:launchMode="singleTop">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                      <intent-filter>
+                          <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+                      </intent-filter>
+                      <meta-data
+                          android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                          android:resource="@xml/device_filter" />
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/xml/device_filter.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <usb-device class="6" subclass="1" protocol="1" />
+              <usb-device vendor-id="1200" />
+              <usb-device vendor-id="1193" />
+          </resources>
+          EOF
 
       - name: Download & Jalankan Gradle 8.5 untuk Build APK
         run: |
