@@ -12,18 +12,19 @@ jobs:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Cek Struktur Folder Proyek
-        run: |
-          ls -la
-          find app -maxdepth 4
-
       - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Download & Jalankan Gradle 8.5 Langsung
+      - name: Buat File gradle.properties (Aktifkan AndroidX)
+        run: |
+          echo "android.useAndroidX=true" > gradle.properties
+          echo "android.enableJetifier=true" >> gradle.properties
+          echo "org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8" >> gradle.properties
+
+      - name: Download & Jalankan Gradle 8.5 untuk Build APK
         run: |
           wget -q https://services.gradle.org/distributions/gradle-8.5-bin.zip
           unzip -q gradle-8.5-bin.zip
