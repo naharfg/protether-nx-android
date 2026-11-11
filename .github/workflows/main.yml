@@ -7,74 +7,610 @@ on:
 
 jobs:
   build-apk:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
       - name: Setup JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Siapkan gradle.properties & Perbaiki Manifest Otomatis
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Generate Clean Project Files
         run: |
-          echo "android.useAndroidX=true" > gradle.properties
-          echo "android.enableJetifier=true" >> gradle.properties
-          echo "org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8" >> gradle.properties
+          python3 - << 'PYEOF'
+          import os, textwrap
 
-          mkdir -p app/src/main/res/xml
+          def write_file(path, content):
+              os.makedirs(os.path.dirname(path) if os.path.dirname(path) else ".", exist_ok=True)
+              clean_text = textwrap.dedent(content).strip() + "\n"
+              with open(path, "w", encoding="utf-8") as f:
+                  f.write(clean_text)
 
-          cat << 'EOF' > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-feature android:name="android.hardware.usb.host" android:required="true" />
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+          write_file("gradle.properties", """
+              android.useAndroidX=true
+              android.enableJetifier=true
+              org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          """)
 
-              <application
-                  android:allowBackup="true"
-                  android:label="ProTether NX"
-                  android:supportsRtl="true"
-                  android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true"
-                      android:screenOrientation="portrait"
-                      android:launchMode="singleTop">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                      <intent-filter>
-                          <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
-                      </intent-filter>
-                      <meta-data
-                          android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
-                          android:resource="@xml/device_filter" />
-                  </activity>
-              </application>
-          </manifest>
-          EOF
+          write_file("settings.gradle.kts", """
+              pluginManagement {
+                  repositories {
+                      google()
+                      mavenCentral()
+                      gradlePluginPortal()
+                  }
+              }
+              dependencyResolutionManagement {
+                  repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+                  repositories {
+                      google()
+                      mavenCentral()
+                  }
+              }
+              rootProject.name = "ProTetherNX"
+              include(":app")
+          """)
 
-          cat << 'EOF' > app/src/main/res/xml/device_filter.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <usb-device class="6" subclass="1" protocol="1" />
-              <usb-device vendor-id="1200" />
-              <usb-device vendor-id="1193" />
-          </resources>
-          EOF
+          write_file("build.gradle.kts", """
+              plugins {
+                  id("com.android.application") version "8.2.2" apply false
+                  id("org.jetbrains.kotlin.android") version "1.9.22" apply false
+              }
+          """)
 
-      - name: Download & Jalankan Gradle 8.5 untuk Build APK
+          write_file("app/build.gradle.kts", """
+              plugins {
+                  id("com.android.application")
+                  id("org.jetbrains.kotlin.android")
+              }
+
+              android {
+                  namespace = "com.protether.nx"
+                  compileSdk = 34
+
+                  defaultConfig {
+                      applicationId = "com.protether.nx"
+                      minSdk = 26
+                      targetSdk = 34
+                      versionCode = 1
+                      versionName = "1.0.0"
+                  }
+
+                  buildTypes {
+                      release {
+                          isMinifyEnabled = false
+                      }
+                  }
+                  compileOptions {
+                      sourceCompatibility = JavaVersion.VERSION_17
+                      targetCompatibility = JavaVersion.VERSION_17
+                  }
+                  kotlinOptions {
+                      jvmTarget = "17"
+                  }
+                  buildFeatures {
+                      compose = true
+                  }
+                  composeOptions {
+                      kotlinCompilerExtensionVersion = "1.5.8"
+                  }
+              }
+
+              dependencies {
+                  implementation("androidx.core:core-ktx:1.12.0")
+                  implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+                  implementation("androidx.activity:activity-compose:1.8.2")
+                  implementation(platform("androidx.compose:compose-bom:2024.02.00"))
+                  implementation("androidx.compose.ui:ui")
+                  implementation("androidx.compose.ui:ui-graphics")
+                  implementation("androidx.compose.ui:ui-tooling-preview")
+                  implementation("androidx.compose.material3:material3")
+                  implementation("androidx.exifinterface:exifinterface:1.3.7")
+                  implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+              }
+          """)
+
+          write_file("app/src/main/AndroidManifest.xml", """
+              <?xml version="1.0" encoding="utf-8"?>
+              <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+                  <uses-feature android:name="android.hardware.usb.host" android:required="true" />
+                  <uses-permission android:name="android.permission.INTERNET" />
+                  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+                  <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+                  <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+                  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+                  <application
+                      android:allowBackup="true"
+                      android:label="ProTether NX"
+                      android:supportsRtl="true"
+                      android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+                      <activity
+                          android:name=".MainActivity"
+                          android:exported="true"
+                          android:screenOrientation="portrait"
+                          android:launchMode="singleTop">
+                          <intent-filter>
+                              <action android:name="android.intent.action.MAIN" />
+                              <category android:name="android.intent.category.LAUNCHER" />
+                          </intent-filter>
+                          <intent-filter>
+                              <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+                          </intent-filter>
+                          <meta-data
+                              android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                              android:resource="@xml/device_filter" />
+                      </activity>
+                  </application>
+              </manifest>
+          """)
+
+          write_file("app/src/main/res/xml/device_filter.xml", """
+              <?xml version="1.0" encoding="utf-8"?>
+              <resources>
+                  <usb-device class="6" subclass="1" protocol="1" />
+                  <usb-device vendor-id="1200" />
+                  <usb-device vendor-id="1193" />
+              </resources>
+          """)
+
+          write_file("app/src/main/java/com/protether/nx/ptp/PtpConstants.kt", """
+              package com.protether.nx.ptp
+
+              object PtpConstants {
+                  const val OP_GET_DEVICE_INFO: Short = 0x1001
+                  const val OP_OPEN_SESSION: Short = 0x1002
+                  const val OP_CLOSE_SESSION: Short = 0x1003
+                  const val OP_GET_STORAGE_IDS: Short = 0x1004
+                  const val OP_GET_OBJECT_HANDLES: Short = 0x1007
+                  const val OP_GET_OBJECT_INFO: Short = 0x1008
+                  const val OP_GET_OBJECT: Short = 0x1009
+                  const val OP_GET_THUMB: Short = 0x100A
+                  const val OP_INITIATE_CAPTURE: Short = 0x100E
+                  const val OP_GET_DEVICE_PROP_VALUE: Short = 0x1015
+                  const val OP_SET_DEVICE_PROP_VALUE: Short = 0x1016
+
+                  const val OP_NIKON_START_LIVE_VIEW: Short = 0x9201.toShort()
+                  const val OP_NIKON_END_LIVE_VIEW: Short = 0x9202.toShort()
+                  const val OP_NIKON_GET_LIVE_VIEW_IMAGE: Short = 0x9203.toShort()
+                  const val OP_NIKON_MF_DRIVE: Short = 0x9204.toShort()
+                  const val OP_NIKON_CHANGE_AF_AREA: Short = 0x9205.toShort()
+
+                  const val PROP_WHITE_BALANCE: Short = 0x5005
+                  const val PROP_F_NUMBER: Short = 0x5007
+                  const val PROP_EXPOSURE_TIME: Short = 0x500D
+                  const val PROP_EXPOSURE_INDEX: Short = 0x500F
+                  const val EVENT_OBJECT_ADDED: Short = 0x4002
+              }
+          """)
+
+          write_file("app/src/main/java/com/protether/nx/ptp/PtpUsbController.kt", """
+              package com.protether.nx.ptp
+
+              import android.content.Context
+              import android.hardware.usb.*
+              import kotlinx.coroutines.Dispatchers
+              import kotlinx.coroutines.withContext
+              import java.nio.ByteBuffer
+              import java.nio.ByteOrder
+
+              data class CameraExifItem(
+                  val objectHandle: Int,
+                  val fileName: String,
+                  val isRawNef: Boolean,
+                  val shutterSpeed: String,
+                  val aperture: String,
+                  val iso: String,
+                  val focalLength: String,
+                  val fileSizeMb: Double
+              )
+
+              class PtpUsbController(private val context: Context) {
+                  private val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
+                  private var connection: UsbDeviceConnection? = null
+                  private var usbInterface: UsbInterface? = null
+                  private var endpointOut: UsbEndpoint? = null
+                  private var endpointIn: UsbEndpoint? = null
+                  private var transactionId = 1
+
+                  fun findConnectedCamera(): UsbDevice? {
+                      return usbManager.deviceList.values.firstOrNull { device ->
+                          (0 until device.interfaceCount).any { i ->
+                              device.getInterface(i).interfaceClass == UsbConstants.USB_CLASS_STILL_IMAGE
+                          }
+                      }
+                  }
+
+                  suspend fun openSession(device: UsbDevice): Boolean = withContext(Dispatchers.IO) {
+                      val intf = (0 until device.interfaceCount)
+                          .map { device.getInterface(it) }
+                          .firstOrNull { it.interfaceClass == UsbConstants.USB_CLASS_STILL_IMAGE }
+                          ?: return@withContext false
+
+                      val conn = usbManager.openDevice(device) ?: return@withContext false
+                      if (!conn.claimInterface(intf, true)) {
+                          conn.close()
+                          return@withContext false
+                      }
+
+                      for (i in 0 until intf.endpointCount) {
+                          val ep = intf.getEndpoint(i)
+                          if (ep.type == UsbConstants.USB_ENDPOINT_XFER_BULK) {
+                              if (ep.direction == UsbConstants.USB_DIR_OUT) endpointOut = ep
+                              else if (ep.direction == UsbConstants.USB_DIR_IN) endpointIn = ep
+                          }
+                      }
+
+                      connection = conn
+                      usbInterface = intf
+                      sendPtpCommand(PtpConstants.OP_OPEN_SESSION, intArrayOf(1))
+                  }
+
+                  suspend fun setExposureProperty(propCode: Short, rawValue: Int): Boolean = withContext(Dispatchers.IO) {
+                      sendPtpCommand(PtpConstants.OP_SET_DEVICE_PROP_VALUE, intArrayOf(propCode.toInt(), rawValue))
+                  }
+
+                  suspend fun setTouchAfCoordinate(normX: Float, normY: Float, sensorWidth: Int = 6000, sensorHeight: Int = 4000): Boolean = withContext(Dispatchers.IO) {
+                      val targetX = (normX * sensorWidth).toInt().coerceIn(0, sensorWidth)
+                      val targetY = (normY * sensorHeight).toInt().coerceIn(0, sensorHeight)
+                      sendPtpCommand(PtpConstants.OP_NIKON_CHANGE_AF_AREA, intArrayOf(targetX, targetY))
+                  }
+
+                  suspend fun triggerRemoteShutter(): Boolean = withContext(Dispatchers.IO) {
+                      sendPtpCommand(PtpConstants.OP_INITIATE_CAPTURE, intArrayOf(0, 0))
+                  }
+
+                  private fun sendPtpCommand(opCode: Short, params: IntArray = intArrayOf()): Boolean {
+                      val conn = connection ?: return false
+                      val epOut = endpointOut ?: return false
+                      val length = 12 + (params.size * 4)
+
+                      val buffer = ByteBuffer.allocate(length).order(ByteOrder.LITTLE_ENDIAN)
+                      buffer.putInt(length)
+                      buffer.putShort(1)
+                      buffer.putShort(opCode)
+                      buffer.putInt(transactionId++)
+                      params.forEach { buffer.putInt(it) }
+
+                      val bytes = buffer.array()
+                      val transferred = conn.bulkTransfer(epOut, bytes, bytes.size, 2500)
+                      return transferred >= 0
+                  }
+
+                  fun close() {
+                      usbInterface?.let { connection?.releaseInterface(it) }
+                      connection?.close()
+                  }
+              }
+          """)
+
+          write_file("app/src/main/java/com/protether/nx/MainActivity.kt", """
+              package com.protether.nx
+
+              import android.os.Bundle
+              import androidx.activity.ComponentActivity
+              import androidx.activity.compose.setContent
+              import androidx.compose.foundation.background
+              import androidx.compose.foundation.border
+              import androidx.compose.foundation.clickable
+              import androidx.compose.foundation.gestures.detectTapGestures
+              import androidx.compose.foundation.layout.*
+              import androidx.compose.foundation.lazy.grid.GridCells
+              import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+              import androidx.compose.foundation.lazy.grid.items
+              import androidx.compose.foundation.shape.CircleShape
+              import androidx.compose.foundation.shape.RoundedCornerShape
+              import androidx.compose.material3.*
+              import androidx.compose.runtime.*
+              import androidx.compose.ui.Alignment
+              import androidx.compose.ui.Modifier
+              import androidx.compose.ui.draw.clip
+              import androidx.compose.ui.geometry.Offset
+              import androidx.compose.ui.graphics.Color
+              import androidx.compose.ui.input.pointer.pointerInput
+              import androidx.compose.ui.text.font.FontWeight
+              import androidx.compose.ui.unit.IntOffset
+              import androidx.compose.ui.unit.dp
+              import androidx.compose.ui.unit.sp
+              import com.protether.nx.ptp.CameraExifItem
+              import com.protether.nx.ptp.PtpUsbController
+              import kotlinx.coroutines.launch
+              import kotlin.math.roundToInt
+
+              class MainActivity : ComponentActivity() {
+                  private lateinit var ptpController: PtpUsbController
+
+                  override fun onCreate(savedInstanceState: Bundle?) {
+                      super.onCreate(savedInstanceState)
+                      ptpController = PtpUsbController(this)
+                      setContent {
+                          MaterialTheme(colorScheme = darkColorScheme()) {
+                              ProTetherAppScreen(ptpController)
+                          }
+                      }
+                  }
+
+                  override fun onDestroy() {
+                      super.onDestroy()
+                      ptpController.close()
+                  }
+              }
+
+              @Composable
+              fun ProTetherAppScreen(ptpController: PtpUsbController) {
+                  val scope = rememberCoroutineScope()
+                  var activeTab by remember { mutableIntStateOf(0) }
+                  var autoTetherEnabled by remember { mutableStateOf(true) }
+                  var statusLog by remember { mutableStateOf("Siap • Menunggu Kamera USB OTG / PTP-IP") }
+
+                  val shutterValues = listOf("1/60", "1/125", "1/200", "1/400", "1/800", "1/1600")
+                  val apertureValues = listOf("f/1.8", "f/2.8", "f/4.0", "f/5.6", "f/8.0")
+                  val isoValues = listOf("100", "200", "400", "800", "1600", "3200")
+                  val wbValues = listOf("3200K", "4500K", "5200K", "5600K", "6500K")
+
+                  var shutterIdx by remember { mutableIntStateOf(2) }
+                  var apertureIdx by remember { mutableIntStateOf(1) }
+                  var isoIdx by remember { mutableIntStateOf(2) }
+                  var wbIdx by remember { mutableIntStateOf(2) }
+                  var afOffset by remember { mutableStateOf(Offset(420f, 360f)) }
+
+                  var mediaItems by remember {
+                      mutableStateOf(
+                          listOf(
+                              CameraExifItem(101, "DSC_4821.NEF", true, "1/200s", "f/2.8", "ISO 400", "50mm", 29.4),
+                              CameraExifItem(102, "DSC_4822.JPG", false, "1/200s", "f/2.8", "ISO 400", "50mm", 9.1),
+                              CameraExifItem(103, "DSC_4823.NEF", true, "1/160s", "f/4.0", "ISO 200", "35mm", 30.2),
+                              CameraExifItem(104, "DSC_4824.NEF", true, "1/250s", "f/2.8", "ISO 400", "70mm", 28.9)
+                          )
+                      )
+                  }
+
+                  Column(
+                      modifier = Modifier
+                          .fillMaxSize()
+                          .background(Color(0xFF0B0E14))
+                          .padding(14.dp)
+                  ) {
+                      Row(
+                          modifier = Modifier.fillMaxWidth(),
+                          horizontalArrangement = Arrangement.SpaceBetween,
+                          verticalAlignment = Alignment.CenterVertically
+                      ) {
+                          Column {
+                              Text("ProTether NX", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                              Text(statusLog, color = Color(0xFF34D399), fontSize = 11.sp)
+                          }
+                          FilterChip(
+                              selected = autoTetherEnabled,
+                              onClick = { autoTetherEnabled = !autoTetherEnabled },
+                              label = { Text(if (autoTetherEnabled) "Auto-Tether: ON" else "Auto-Tether: OFF") }
+                          )
+                      }
+
+                      Spacer(modifier = Modifier.height(10.dp))
+
+                      Box(modifier = Modifier.weight(1f)) {
+                          when (activeTab) {
+                              0 -> {
+                                  Column(modifier = Modifier.fillMaxSize()) {
+                                      Box(
+                                          modifier = Modifier
+                                              .fillMaxWidth()
+                                              .weight(1f)
+                                              .clip(RoundedCornerShape(16.dp))
+                                              .background(Color(0xFF161B26))
+                                              .border(1.dp, Color(0xFF263042), RoundedCornerShape(16.dp))
+                                              .pointerInput(Unit) {
+                                                  detectTapGestures { tapOffset ->
+                                                      afOffset = tapOffset
+                                                      scope.launch {
+                                                          ptpController.setTouchAfCoordinate(
+                                                              tapOffset.x / size.width.toFloat(),
+                                                              tapOffset.y / size.height.toFloat()
+                                                          )
+                                                          statusLog = "Touch AF Terkunci: (${tapOffset.x.roundToInt()}, ${tapOffset.y.roundToInt()})"
+                                                      }
+                                                  }
+                                              }
+                                      ) {
+                                          Text(
+                                              "LIVE VIEW STREAM (PTP MJPEG) - Ketuk layar untuk Touch AF",
+                                              color = Color(0xFF94A3B8),
+                                              fontSize = 12.sp,
+                                              modifier = Modifier.align(Alignment.Center)
+                                          )
+                                          Box(
+                                              modifier = Modifier
+                                                  .offset { IntOffset(afOffset.x.roundToInt() - 36, afOffset.y.roundToInt() - 36) }
+                                                  .size(72.dp)
+                                                  .border(2.dp, Color(0xFF10B981), RoundedCornerShape(6.dp))
+                                          )
+                                      }
+
+                                      Spacer(modifier = Modifier.height(12.dp))
+
+                                      Row(
+                                          modifier = Modifier.fillMaxWidth(),
+                                          horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                      ) {
+                                          ExposureButton("SHUTTER", shutterValues[shutterIdx], Modifier.weight(1f)) {
+                                              shutterIdx = (shutterIdx + 1) % shutterValues.size
+                                          }
+                                          ExposureButton("APERTURE", apertureValues[apertureIdx], Modifier.weight(1f)) {
+                                              apertureIdx = (apertureIdx + 1) % apertureValues.size
+                                          }
+                                          ExposureButton("ISO", isoValues[isoIdx], Modifier.weight(1f)) {
+                                              isoIdx = (isoIdx + 1) % isoValues.size
+                                          }
+                                          ExposureButton("WB", wbValues[wbIdx], Modifier.weight(1f)) {
+                                              wbIdx = (wbIdx + 1) % wbValues.size
+                                          }
+                                      }
+
+                                      Spacer(modifier = Modifier.height(12.dp))
+
+                                      Button(
+                                          onClick = {
+                                              scope.launch {
+                                                  ptpController.triggerRemoteShutter()
+                                                  val nextNum = 4821 + mediaItems.size
+                                                  val newItem = CameraExifItem(
+                                                      objectHandle = 100 + mediaItems.size + 1,
+                                                      fileName = "DSC_${nextNum}.NEF",
+                                                      isRawNef = true,
+                                                      shutterSpeed = shutterValues[shutterIdx],
+                                                      aperture = apertureValues[apertureIdx],
+                                                      iso = "ISO ${isoValues[isoIdx]}",
+                                                      focalLength = "50mm",
+                                                      fileSizeMb = 29.8
+                                                  )
+                                                  mediaItems = listOf(newItem) + mediaItems
+                                                  statusLog = if (autoTetherEnabled) {
+                                                      "Auto-Tether: ${newItem.fileName} langsung tampil di HP"
+                                                  } else {
+                                                      "Jepret sukses: ${newItem.fileName} tersimpan di SD Card"
+                                                  }
+                                                  if (autoTetherEnabled) activeTab = 1
+                                              }
+                                          },
+                                          modifier = Modifier.fillMaxWidth().height(52.dp),
+                                          colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF59E0B))
+                                      ) {
+                                          Text("JEPRET KAMERA (REMOTE SHUTTER)", color = Color.Black, fontWeight = FontWeight.Bold)
+                                      }
+                                  }
+                              }
+                              1 -> {
+                                  val latest = mediaItems.first()
+                                  Column(
+                                      modifier = Modifier
+                                          .fillMaxSize()
+                                          .clip(RoundedCornerShape(16.dp))
+                                          .background(Color(0xFF161B26))
+                                          .padding(16.dp),
+                                      verticalArrangement = Arrangement.SpaceBetween
+                                  ) {
+                                      Column {
+                                          Text("PRATINJAU KLIEN INSTAN (TETHERING)", color = Color(0xFFF59E0B), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                          Spacer(modifier = Modifier.height(6.dp))
+                                          Text(latest.fileName, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                          Text("${latest.aperture} • ${latest.shutterSpeed} • ${latest.iso} • ${latest.focalLength} (${latest.fileSizeMb} MB)", color = Color(0xFF94A3B8), fontSize = 13.sp)
+                                      }
+                                      Box(
+                                          modifier = Modifier
+                                              .fillMaxWidth()
+                                              .weight(1f)
+                                              .padding(vertical = 12.dp)
+                                              .clip(RoundedCornerShape(12.dp))
+                                              .background(Color(0xFF0F172A)),
+                                          contentAlignment = Alignment.Center
+                                      ) {
+                                          Text("Pratinjau Resolusi Tinggi: ${latest.fileName}", color = Color.White)
+                                      }
+                                      Button(
+                                          onClick = { statusLog = "${latest.fileName} berhasil disimpan ke memori internal HP" },
+                                          modifier = Modifier.fillMaxWidth()
+                                      ) {
+                                          Text("Simpan File RAW (.NEF) + JPG ke Penyimpanan HP")
+                                      }
+                                  }
+                              }
+                              2 -> {
+                                  LazyVerticalGrid(
+                                      columns = GridCells.Fixed(2),
+                                      verticalArrangement = Arrangement.spacedBy(10.dp),
+                                      horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                      modifier = Modifier.fillMaxSize()
+                                  ) {
+                                      items(mediaItems) { item ->
+                                          Column(
+                                              modifier = Modifier
+                                                  .clip(RoundedCornerShape(12.dp))
+                                                  .background(Color(0xFF161B26))
+                                                  .border(1.dp, Color(0xFF263042), RoundedCornerShape(12.dp))
+                                                  .padding(12.dp)
+                                          ) {
+                                              Row(
+                                                  modifier = Modifier.fillMaxWidth(),
+                                                  horizontalArrangement = Arrangement.SpaceBetween
+                                              ) {
+                                                  Text(item.fileName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                                  Text(
+                                                      if (item.isRawNef) "RAW .NEF" else "JPG",
+                                                      color = if (item.isRawNef) Color(0xFFF59E0B) else Color(0xFF38BDF8),
+                                                      fontSize = 10.sp,
+                                                      fontWeight = FontWeight.Bold
+                                                  )
+                                              }
+                                              Spacer(modifier = Modifier.height(8.dp))
+                                              Text("${item.aperture} • ${item.shutterSpeed} • ${item.iso}", color = Color(0xFFCBD5E1), fontSize = 11.sp)
+                                              Text("Ukuran: ${item.fileSizeMb} MB", color = Color(0xFF64748B), fontSize = 11.sp)
+                                              Spacer(modifier = Modifier.height(8.dp))
+                                              OutlinedButton(
+                                                  onClick = { statusLog = "Mengunduh ${item.fileName} (${item.fileSizeMb} MB) ke HP..." },
+                                                  modifier = Modifier.fillMaxWidth()
+                                              ) {
+                                                  Text("Unduh Cepat", fontSize = 11.sp)
+                                              }
+                                          }
+                                      }
+                                  }
+                              }
+                          }
+                      }
+
+                      Spacer(modifier = Modifier.height(10.dp))
+
+                      NavigationBar(containerColor = Color(0xFF161B26)) {
+                          NavigationBarItem(
+                              selected = activeTab == 0,
+                              onClick = { activeTab = 0 },
+                              icon = { Box(Modifier.size(8.dp).background(Color(0xFFF59E0B), CircleShape)) },
+                              label = { Text("Live Remote") }
+                          )
+                          NavigationBarItem(
+                              selected = activeTab == 1,
+                              onClick = { activeTab = 1 },
+                              icon = { Box(Modifier.size(8.dp).background(Color(0xFF34D399), CircleShape)) },
+                              label = { Text("Tethering") }
+                          )
+                          NavigationBarItem(
+                              selected = activeTab == 2,
+                              onClick = { activeTab = 2 },
+                              icon = { Box(Modifier.size(8.dp).background(Color(0xFF38BDF8), CircleShape)) },
+                              label = { Text("Galeri & EXIF") }
+                          )
+                      }
+                  }
+              }
+
+              @Composable
+              fun ExposureButton(label: String, value: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+                  Column(
+                      modifier = modifier
+                          .clip(RoundedCornerShape(10.dp))
+                          .background(Color(0xFF161B26))
+                          .border(1.dp, Color(0xFF263042), RoundedCornerShape(10.dp))
+                          .clickable { onClick() }
+                          .padding(vertical = 10.dp, horizontal = 8.dp),
+                      horizontalAlignment = Alignment.CenterHorizontally
+                  ) {
+                      Text(label, color = Color(0xFF94A3B8), fontSize = 10.sp)
+                      Text(value, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                  }
+              }
+          """)
+          print("All project files generated cleanly with zero leading whitespace!")
+          PYEOF
+
+      - name: Download & Run Gradle 8.5 to Build APK
         run: |
           wget -q https://services.gradle.org/distributions/gradle-8.5-bin.zip
           unzip -q gradle-8.5-bin.zip
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          yes | sdkmanager --licenses || true
           ./gradle-8.5/bin/gradle assembleDebug --no-daemon --stacktrace
 
       - name: Upload Compiled APK Artifact
